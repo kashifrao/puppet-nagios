@@ -1,0 +1,125 @@
+#!/usr/bin/python -W ignore
+
+import datetime,sys,time, cgi, os,MySQLdb
+import shutil
+
+reload (sys)
+
+from time import *
+from datetime import date, timedelta
+
+def start_mon():
+
+    mip=os.popen("gcloud compute addresses describe ts-mgmt1 --region=us-central1 --format=flattened --format='value(address)' | /usr/bin/awk 'FNR == 1 {print $0}'")
+    mgmtip=(mip.readline()).rstrip()
+    db_conn=MySQLdb.connect(host=mgmtip,port=3306,unix_socket="/var/lib/mysql/mysql.sock",user="master",passwd="btmor499",db="mgmt-dashboard" )
+    db_cur2 = db_conn.cursor()
+    t= strftime("%Y-%m-%d %H:%M:%S", localtime())
+    try:
+        name=''
+        hip=''
+        hservices=''
+        t= strftime("%Y-%m-%d %H:%M:%S", localtime())
+        db_cur2.execute("select hostname,host_ip,host_services from `mgmt-dashboard`.nagios_host where host_added='N'" )
+        rows= db_cur2.fetchall()
+        default_services=["check_load","check_disk","check_ssh","check_procs","check_procsD","check_procsZ","check_crond","check_rsyslogd","check_nrpe","check_postfix"]
+        for nrows in rows:
+            name=nrows[0]
+            hip=nrows[1]
+            hservices=nrows[2]
+
+            data="""
+define host {
+        use                     linux-server
+        host_name               %s
+        alias                   %s
+        address                 %s
+        notifications_enabled           1
+        event_handler_enabled           1
+        max_check_attempts              5
+        notification_interval           10
+        notification_period             24x7
+        notification_options            d,u,r,f,s
+        }
+        """ % (name,name,hip)
+
+            f = open("/etc/nagios/servers/"+name+".cfg","w")
+            f.write(data)
+            serv = hservices.split(',')
+
+            for i in range(len(default_services)):
+                data1="""
+define service {
+        use                             generic-service
+        host_name                       %s
+        service_description             %s
+        check_command                   check_nrpe!%s
+        active_checks_enabled           1
+        passive_checks_enabled          1
+        parallelize_check               1
+        obsess_over_service             1
+        flap_detection_enabled          0
+        check_freshness                 0
+        notifications_enabled           1
+        event_handler_enabled           1
+        notification_interval           10
+        check_period                    24x7
+        normal_check_interval           5
+        retry_check_interval            1
+        max_check_attempts              5
+        notification_period             24x7
+        notification_options            w,u,c,r,f,s
+        }
+                """ % (name,default_services[i],default_services[i])
+                f.write(data1)
+            #end for
+
+            for i in range(len(serv)):
+                data2="""
+define service {
+        use                             generic-service
+        host_name                       %s
+        service_description             %s
+        check_command                   check_nrpe!%s
+        active_checks_enabled           1
+        passive_checks_enabled          1
+        parallelize_check               1
+        obsess_over_service             1
+        flap_detection_enabled          0
+        check_freshness                 0
+        notifications_enabled           1
+        event_handler_enabled           1
+        notification_interval           10
+        check_period                    24x7
+        normal_check_interval           5
+        retry_check_interval            1
+        max_check_attempts              5
+        notification_period             24x7
+        notification_options            w,u,c,r,f,s
+        }
+                """ % (name,serv[i],serv[i])
+                f.write(data2)
+            #end for
+
+
+            f.close()
+            aa1a=os.popen("service nagios restart")
+
+            db_cur2.execute("update  `mgmt-dashboard`.nagios_host set host_added='Y'  where  hostname='%s'" % (name) )
+
+        #end for
+
+        db_conn.commit()
+        db_conn.close()
+        mip.close()
+    except:
+        #db_conn.close()
+        mip.close()
+        print "Error No. 1"
+        raise
+
+
+# end def start_mon()
+
+if __name__ == "__main__":
+    start_mon()

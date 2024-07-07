@@ -1,0 +1,35 @@
+define host {
+        use                     linux-server
+        host_name               aas-master
+        alias                   aas-master
+        address                 <%= @masterip %>
+        notifications_enabled           1     
+        event_handler_enabled           1       
+        max_check_attempts              5
+        notification_interval           10
+        notification_period             24x7
+        notification_options            d,u,r,f,s
+        }
+<% @default_checks.each do |checks| -%>
+define service {
+        use                             generic-service
+        host_name                       aas-master
+        service_description             <%= checks %>
+        check_command                   check_nrpe!<%= checks %>
+        active_checks_enabled           1    
+        passive_checks_enabled          1      
+        parallelize_check               1    
+        obsess_over_service             1      
+        flap_detection_enabled          0
+        check_freshness                 0      
+        notifications_enabled           1       
+        event_handler_enabled           1       
+        notification_interval           10       
+        check_period                    24x7
+        normal_check_interval           5
+        retry_check_interval            1
+        max_check_attempts              5
+        notification_period             24x7
+        notification_options            w,u,c,r,f,s
+        }
+<% end -%>
